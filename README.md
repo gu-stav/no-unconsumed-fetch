@@ -114,6 +114,22 @@ pnpm run lint    # Lint with oxlint
 pnpm run format  # Format with oxfmt
 ```
 
+## Releasing
+
+Versioning and publishing are managed by [changesets](https://github.com/changesets/changesets).
+
+1. After a user-facing change, add a changeset:
+
+   ```bash
+   pnpm changeset
+   ```
+
+   Select `patch`, `minor`, or `major` and describe the change. The generated `.changeset/*.md` file is committed alongside the change.
+
+2. When changesets are merged to `main`, the `Release` workflow opens (or updates) a **"chore: release"** PR that bumps the version and regenerates `CHANGELOG.md`.
+
+3. Merging that PR triggers the same workflow again, which publishes to npm via OIDC trusted publishing (no token required) and pushes a git tag.
+
 ## License
 
 ISC

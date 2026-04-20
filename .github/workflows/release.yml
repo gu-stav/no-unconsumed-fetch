@@ -1,27 +1,29 @@
-name: Publish
+name: Release
 
 on:
-  release:
-    types: [published]
-  workflow_dispatch:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
 
 concurrency:
-  group: publish-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Publish to npm
+  release:
+    name: Release via changesets
     runs-on: ubuntu-latest
     environment: npm
     permissions:
-      contents: read
-      id-token: write
+      contents: write # changesets/action commits version bumps and tags
+      pull-requests: write # changesets/action opens the "Version Packages" PR
+      id-token: write # npm OIDC trusted publishing + provenance
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # changesets needs history to compute tags
 
       - uses: pnpm/action-setup@v4
 
@@ -42,15 +44,12 @@ jobs:
       - run: pnpm run build
       - run: pnpm test
 
-      - name: Verify release tag matches package.json
-        if: github.event_name == 'release'
-        run: |
-          pkg_version="v$(node -p "require('./package.json').version")"
-          tag="${GITHUB_REF_NAME}"
-          if [ "$pkg_version" != "$tag" ]; then
-            echo "::error::Tag $tag does not match package.json version $pkg_version"
-            exit 1
-          fi
-
-      - name: Publish
-        run: npm publish --access public
+      - name: Create release PR or publish
+        uses: changesets/action@v1
+        with:
+          version: pnpm run version-packages
+          publish: pnpm run release
+          title: "chore: release"
+          commit: "chore: release"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

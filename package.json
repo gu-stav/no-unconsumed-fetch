@@ -33,9 +33,14 @@
     "lint:fix": "oxlint --fix",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "prepublishOnly": "npm run build"
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm run build && changeset publish",
+    "prepublishOnly": "pnpm run build"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.6.0",
+    "@changesets/cli": "^2.31.0",
     "@types/eslint": "^9.6.1",
     "@types/estree": "^1.0.8",
     "eslint": "^10.2.0",
