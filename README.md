@@ -107,9 +107,11 @@ fetch(url).then((r) => r.json());
 ## Development
 
 ```bash
-npm install
-npm run build   # Compile TypeScript → dist/
-npm test        # Run rule tests
+pnpm install
+pnpm run build   # Compile TypeScript → dist/
+pnpm test        # Run rule tests
+pnpm run lint    # Lint with oxlint
+pnpm run format  # Format with oxfmt
 ```
 
 ## License

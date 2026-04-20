@@ -38,8 +38,18 @@
     "url": "https://github.com/gu-stav/no-unconsumed-fetch/issues"
   },
   "homepage": "https://github.com/gu-stav/no-unconsumed-fetch#readme",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
   "devDependencies": {
     "@types/eslint": "^9.6.1",
+    "@types/estree": "^1.0.8",
     "eslint": "^10.2.0",
     "oxfmt": "^0.45.0",
     "oxlint": "^1.60.0",
