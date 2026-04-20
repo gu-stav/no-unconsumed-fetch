@@ -276,7 +276,7 @@ function getAliasTargetName(identifier: Rule.Node): string | null {
 function isVariableConsumed(
   scope: Scope.Scope,
   name: string,
-  visited: Set<string> = new Set()
+  visited: Set<string> = new Set(),
 ): boolean {
   if (visited.has(name)) return false;
   visited.add(name);
