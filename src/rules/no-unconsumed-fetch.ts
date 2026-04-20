@@ -4,6 +4,7 @@ import type {
   CallExpression,
   FunctionExpression,
   Identifier,
+  MemberExpression,
   ObjectPattern,
   Property,
   VariableDeclarator,
@@ -59,6 +60,21 @@ function isGlobalFetchCall(node: CallExpression, scope: Scope.Scope): boolean {
   }
 
   return false;
+}
+
+/**
+ * Returns the static string name of a member access (both `x.foo` and
+ * `x["foo"]`), or null when the name cannot be determined statically
+ * (computed numeric/template/expression keys).
+ */
+function getStaticMemberName(member: MemberExpression): string | null {
+  if (!member.computed) {
+    return member.property.type === "Identifier" ? member.property.name : null;
+  }
+  if (member.property.type === "Literal" && typeof member.property.value === "string") {
+    return member.property.value;
+  }
+  return null;
 }
 
 function resolveToVariable(scope: Scope.Scope, identifier: Identifier): Scope.Variable | null {
@@ -142,7 +158,7 @@ function isValueHandedOff(node: Rule.Node): boolean {
 
     case "CallExpression":
     case "NewExpression":
-      return parent.arguments.includes(outer as CallExpression);
+      return parent.arguments.some((arg) => arg === outer);
 
     case "ArrowFunctionExpression":
       return parent.body === outer;
@@ -164,6 +180,8 @@ function isValueHandedOff(node: Rule.Node): boolean {
 /**
  * True when the identifier is used in a way that consumes the response body.
  * Walks past transparent wrappers (`as`, `!`, `satisfies`) before inspecting.
+ * Accepts both dot access (`res.json()`) and bracket access with a string
+ * literal (`res["json"]()`).
  */
 function isConsumingUsage(identifier: Rule.Node): boolean {
   const outer = resolveOuterExpression(identifier);
@@ -171,9 +189,10 @@ function isConsumingUsage(identifier: Rule.Node): boolean {
   if (!parent || parent.type !== "MemberExpression" || parent.object !== outer) {
     return false;
   }
-  if (parent.computed || parent.property.type !== "Identifier") return false;
 
-  const propName = parent.property.name;
+  const propName = getStaticMemberName(parent);
+  if (propName === null) return false;
+
   const grandparent = parent.parent;
 
   // res.json(), res.text(), ...
@@ -186,14 +205,11 @@ function isConsumingUsage(identifier: Rule.Node): boolean {
     if (!grandparent) return false;
 
     // res.body.cancel(), res.body.getReader(), res.body.pipeTo(...)
-    if (
-      grandparent.type === "MemberExpression" &&
-      grandparent.object === parent &&
-      !grandparent.computed &&
-      grandparent.property.type === "Identifier" &&
-      STREAM_CONSUME_METHODS.has(grandparent.property.name)
-    ) {
-      return isCallee(grandparent, grandparent.parent);
+    if (grandparent.type === "MemberExpression" && grandparent.object === parent) {
+      const methodName = getStaticMemberName(grandparent);
+      if (methodName !== null && STREAM_CONSUME_METHODS.has(methodName)) {
+        return isCallee(grandparent, grandparent.parent);
+      }
     }
 
     // for await (const x of res.body) {...}
@@ -222,11 +238,49 @@ function isCallee(callee: Rule.Node, maybeCall: Rule.Node | undefined): boolean 
 }
 
 /**
+ * If `identifier` is the source of a simple aliasing assignment
+ * (`const target = identifier` or `target = identifier`), return the target
+ * binding name. Otherwise null.
+ */
+function getAliasTargetName(identifier: Rule.Node): string | null {
+  const outer = resolveOuterExpression(identifier);
+  const parent = outer.parent;
+  if (!parent) return null;
+
+  if (
+    parent.type === "VariableDeclarator" &&
+    parent.init === outer &&
+    parent.id.type === "Identifier"
+  ) {
+    return parent.id.name;
+  }
+
+  if (
+    parent.type === "AssignmentExpression" &&
+    parent.operator === "=" &&
+    parent.right === outer &&
+    parent.left.type === "Identifier"
+  ) {
+    return parent.left.name;
+  }
+
+  return null;
+}
+
+/**
  * Walk references of a variable that was assigned a fetch result. Returns
  * true if any reference indicates the body was consumed or the response was
- * handed off to someone else.
+ * handed off to someone else. Follows simple aliases (`const r2 = res`) so
+ * that consumption of the alias counts as consumption of the original.
  */
-function isVariableConsumed(scope: Scope.Scope, name: string): boolean {
+function isVariableConsumed(
+  scope: Scope.Scope,
+  name: string,
+  visited: Set<string> = new Set()
+): boolean {
+  if (visited.has(name)) return false;
+  visited.add(name);
+
   const variable = findVariable(scope, name);
   if (!variable) return false;
 
@@ -236,6 +290,11 @@ function isVariableConsumed(scope: Scope.Scope, name: string): boolean {
     // Ignore the write reference (the declaration/assignment itself).
     if (ref.writeExpr) continue;
     if (isConsumingUsage(id) || isValueHandedOff(id)) return true;
+
+    const aliasName = getAliasTargetName(id);
+    if (aliasName !== null && isVariableConsumed(scope, aliasName, visited)) {
+      return true;
+    }
   }
   return false;
 }
@@ -401,19 +460,18 @@ const rule: Rule.RuleModule = {
               }
               return;
             }
-            // `.then(cb)` where cb is an identifier or other expression — we
-            // can't inspect the body. Fall through to the permissive default.
+            // `.then(cb)` where cb is not an inline function (named identifier,
+            // null, missing, etc.) — we can't verify the body is consumed, so
+            // flag it. Callers can silence by wrapping: `.then(r => helper(r))`.
+            context.report({ node, messageId: "unconsumed" });
             return;
           }
           // Chained with something other than `.then` (e.g. `.catch`, `.status`
           // on an awaited fetch). Without a `.then` in the chain the body is
           // never consumed. For awaited forms like `(await fetch(url)).json()`
-          // the member itself is the consumer — check it.
-          if (
-            !parent.computed &&
-            parent.property.type === "Identifier" &&
-            (BODY_READ_METHODS.has(parent.property.name) || parent.property.name === "body")
-          ) {
+          // or `(await fetch(url))["json"]()` the member itself is the
+          // consumer — check it directly.
+          if (isConsumingUsage(resolved)) {
             return;
           }
           context.report({ node, messageId: "unconsumed" });

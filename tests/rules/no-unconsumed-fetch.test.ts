@@ -127,6 +127,66 @@ ruleTester.run("no-unconsumed-fetch", rule, {
         await res.body?.cancel();
       `,
     },
+    {
+      name: "optional call on global fetch, chained .then consumes",
+      code: `
+        fetch?.(url).then(res => res.json());
+      `,
+    },
+
+    // -----------------------------------------------------------------
+    // Computed (bracket) member access with string literal
+    // -----------------------------------------------------------------
+    {
+      name: 'body read via computed member — res["json"]()',
+      code: `
+        const res = await fetch(url);
+        await res["json"]();
+      `,
+    },
+    {
+      name: 'stream cancelled via computed member — res.body["cancel"]()',
+      code: `
+        const res = await fetch(url);
+        await res.body["cancel"]();
+      `,
+    },
+    {
+      name: 'awaited fetch consumed via computed member — (await fetch())["json"]()',
+      code: `
+        const data = (await fetch(url))["json"]();
+      `,
+    },
+
+    // -----------------------------------------------------------------
+    // Aliasing — consumption through a renamed binding
+    // -----------------------------------------------------------------
+    {
+      name: "aliased response consumed through new const binding",
+      code: `
+        const res = await fetch(url);
+        const r2 = res;
+        await r2.json();
+      `,
+    },
+    {
+      name: "aliased response consumed through later assignment",
+      code: `
+        let r2;
+        const res = await fetch(url);
+        r2 = res;
+        await r2.json();
+      `,
+    },
+    {
+      name: "aliased response consumed through a chain of aliases",
+      code: `
+        const res = await fetch(url);
+        const r2 = res;
+        const r3 = r2;
+        await r3.text();
+      `,
+    },
 
     // -----------------------------------------------------------------
     // Handoff patterns (caller/callee takes responsibility)
@@ -234,12 +294,6 @@ ruleTester.run("no-unconsumed-fetch", rule, {
       name: "chained: .then returns response (handed off downstream)",
       code: `
         fetch(url).then(res => res).catch(() => undefined);
-      `,
-    },
-    {
-      name: "chained: .then callback is a named function (not analysed)",
-      code: `
-        fetch(url).then(processResponse).catch(() => undefined);
       `,
     },
     {
@@ -355,6 +409,13 @@ ruleTester.run("no-unconsumed-fetch", rule, {
       code: `
         const res = (await fetch(url))!;
         await res.arrayBuffer();
+      `,
+      languageOptions: tsLanguageOptions,
+    },
+    {
+      name: "TS `as` cast on non-awaited fetch, chained .then consumes",
+      code: `
+        (fetch(url) as Promise<Response>).then(res => res.json());
       `,
       languageOptions: tsLanguageOptions,
     },
@@ -542,6 +603,34 @@ ruleTester.run("no-unconsumed-fetch", rule, {
       name: "chained: only .finally attached",
       code: `
         fetch(url).finally(() => cleanup());
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "chained: .then callback is a named function (can't verify)",
+      code: `
+        fetch(url).then(processResponse).catch(() => undefined);
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "chained: .then(null, onErr) leaks the success-path body",
+      code: `
+        fetch(url).then(null, err => { console.error(err); });
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "chained: .then() called with no arguments",
+      code: `
+        fetch(url).then();
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "optional call on global fetch, bare statement",
+      code: `
+        fetch?.(url);
       `,
       errors: unconsumed,
     },
