@@ -1,4 +1,5 @@
 import { RuleTester } from "eslint";
+import * as tsParser from "@typescript-eslint/parser";
 import rule = require("../../src/rules/no-unconsumed-fetch");
 
 const ruleTester = new RuleTester({
@@ -14,6 +15,16 @@ const ruleTester = new RuleTester({
     },
   },
 });
+
+const tsLanguageOptions = {
+  parser: tsParser,
+  ecmaVersion: 2022 as const,
+  sourceType: "module" as const,
+  globals: {
+    fetch: "readonly" as const,
+    console: "readonly" as const,
+  },
+};
 
 const unconsumed = [{ messageId: "unconsumed" as const }];
 
@@ -116,6 +127,66 @@ ruleTester.run("no-unconsumed-fetch", rule, {
         await res.body?.cancel();
       `,
     },
+    {
+      name: "optional call on global fetch, chained .then consumes",
+      code: `
+        fetch?.(url).then(res => res.json());
+      `,
+    },
+
+    // -----------------------------------------------------------------
+    // Computed (bracket) member access with string literal
+    // -----------------------------------------------------------------
+    {
+      name: 'body read via computed member — res["json"]()',
+      code: `
+        const res = await fetch(url);
+        await res["json"]();
+      `,
+    },
+    {
+      name: 'stream cancelled via computed member — res.body["cancel"]()',
+      code: `
+        const res = await fetch(url);
+        await res.body["cancel"]();
+      `,
+    },
+    {
+      name: 'awaited fetch consumed via computed member — (await fetch())["json"]()',
+      code: `
+        const data = (await fetch(url))["json"]();
+      `,
+    },
+
+    // -----------------------------------------------------------------
+    // Aliasing — consumption through a renamed binding
+    // -----------------------------------------------------------------
+    {
+      name: "aliased response consumed through new const binding",
+      code: `
+        const res = await fetch(url);
+        const r2 = res;
+        await r2.json();
+      `,
+    },
+    {
+      name: "aliased response consumed through later assignment",
+      code: `
+        let r2;
+        const res = await fetch(url);
+        r2 = res;
+        await r2.json();
+      `,
+    },
+    {
+      name: "aliased response consumed through a chain of aliases",
+      code: `
+        const res = await fetch(url);
+        const r2 = res;
+        const r3 = r2;
+        await r3.text();
+      `,
+    },
 
     // -----------------------------------------------------------------
     // Handoff patterns (caller/callee takes responsibility)
@@ -211,6 +282,40 @@ ruleTester.run("no-unconsumed-fetch", rule, {
         const data = (await fetch(url)).json();
       `,
     },
+    {
+      name: "chained: .then cancels body explicitly",
+      code: `
+        fetch(url).then(res => {
+          void res.body?.cancel();
+        });
+      `,
+    },
+    {
+      name: "chained: .then returns response (handed off downstream)",
+      code: `
+        fetch(url).then(res => res).catch(() => undefined);
+      `,
+    },
+    {
+      name: "chained: .then callback consumes via block body",
+      code: `
+        fetch(url)
+          .then(res => {
+            const shard = res.headers.get("X-Shard");
+            void res.body?.cancel();
+            return shard;
+          })
+          .catch(() => undefined);
+      `,
+    },
+    {
+      name: "arrow-wrapped fetch returned from a function",
+      code: `
+        function makeFetcher() {
+          return () => fetch(url);
+        }
+      `,
+    },
 
     // -----------------------------------------------------------------
     // Member forms of global fetch
@@ -277,6 +382,66 @@ ruleTester.run("no-unconsumed-fetch", rule, {
       name: "destructuring with a rest element captures the body",
       code: `
         const { status, ...rest } = await fetch(url);
+      `,
+    },
+
+    // -----------------------------------------------------------------
+    // TypeScript type expressions (transparent wrappers around fetch)
+    // -----------------------------------------------------------------
+    {
+      name: "TS `as` cast on awaited fetch, then consumed",
+      code: `
+        const res = (await fetch(url)) as Response;
+        await res.json();
+      `,
+      languageOptions: tsLanguageOptions,
+    },
+    {
+      name: "TS `satisfies` on awaited fetch, then consumed",
+      code: `
+        const res = (await fetch(url)) satisfies Response;
+        await res.text();
+      `,
+      languageOptions: tsLanguageOptions,
+    },
+    {
+      name: "TS non-null assertion on awaited fetch, then consumed",
+      code: `
+        const res = (await fetch(url))!;
+        await res.arrayBuffer();
+      `,
+      languageOptions: tsLanguageOptions,
+    },
+    {
+      name: "TS `as` cast on non-awaited fetch, chained .then consumes",
+      code: `
+        (fetch(url) as Promise<Response>).then(res => res.json());
+      `,
+      languageOptions: tsLanguageOptions,
+    },
+
+    // -----------------------------------------------------------------
+    // Async callbacks and conditional consumption inside .then
+    // -----------------------------------------------------------------
+    {
+      name: "chained: .then async arrow callback consumes via await",
+      code: `
+        fetch(url).then(async res => await res.text());
+      `,
+    },
+    {
+      name: "chained: .then async block-body callback consumes via await",
+      code: `
+        fetch(url).then(async res => {
+          const data = await res.json();
+          return data;
+        });
+      `,
+    },
+    {
+      name: "chained: .then callback consumes via ternary (both branches)",
+      code: `
+        fetch(url).then(res => res.ok ? res.json() : res.text());
       `,
     },
   ],
@@ -366,6 +531,159 @@ ruleTester.run("no-unconsumed-fetch", rule, {
       code: `
         const { status } = await fetch(url);
       `,
+      errors: unconsumed,
+    },
+
+    // -----------------------------------------------------------------
+    // Chained .then callback that does not consume
+    // -----------------------------------------------------------------
+    {
+      name: "chained: .then reads only a header",
+      code: `
+        fetch(url, { signal })
+          .then(response => response.headers.get("X-Shard") || undefined)
+          .catch(() => undefined);
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "arrow-wrapped fetch passed to a factory function",
+      code: `
+        factory(() => fetch(url));
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "chained: .then only reads response.ok",
+      code: `
+        fetch(url)
+          .then(response => setAvailable(response.ok))
+          .catch(() => setAvailable(false));
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "chained: .then callback throws without consuming the body",
+      code: `
+        fetch(url).then(res => {
+          throw new Error("status: " + res.status);
+        });
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "chained: .then uses a parameterless callback",
+      code: `
+        fetch(url).then(() => console.log("done"));
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "chained: .then callback only logs the status",
+      code: `
+        fetch(url).then(res => console.log(res.status));
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "chained: .then callback returns a transformed shape (body lost)",
+      code: `
+        fetch(url).then(res => ({ ok: res.ok, status: res.status }));
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "chained: only .catch attached (success path leaks the body)",
+      code: `
+        fetch(url).catch(() => undefined);
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "chained: only .finally attached",
+      code: `
+        fetch(url).finally(() => cleanup());
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "chained: .then callback is a named function (can't verify)",
+      code: `
+        fetch(url).then(processResponse).catch(() => undefined);
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "chained: .then(null, onErr) leaks the success-path body",
+      code: `
+        fetch(url).then(null, err => { console.error(err); });
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "chained: .then() called with no arguments",
+      code: `
+        fetch(url).then();
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "optional call on global fetch, bare statement",
+      code: `
+        fetch?.(url);
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "awaited fetch accessed only for status",
+      code: `
+        const status = (await fetch(url)).status;
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "arrow-wrapped fetch passed to new (constructor argument)",
+      code: `
+        new Observable(() => fetch(url));
+      `,
+      errors: unconsumed,
+    },
+    {
+      name: "destructuring parameter in .then callback leaks the body",
+      code: `
+        fetch(url).then(({ ok }) => setAvailable(ok));
+      `,
+      errors: unconsumed,
+    },
+
+    // -----------------------------------------------------------------
+    // TypeScript type expressions must not hide an unconsumed fetch
+    // -----------------------------------------------------------------
+    {
+      name: "TS `as` cast on awaited fetch, only status read",
+      code: `
+        const res = (await fetch(url)) as Response;
+        console.log(res.status);
+      `,
+      languageOptions: tsLanguageOptions,
+      errors: unconsumed,
+    },
+    {
+      name: "TS `satisfies` on awaited fetch, only status read",
+      code: `
+        const res = (await fetch(url)) satisfies Response;
+        console.log(res.status);
+      `,
+      languageOptions: tsLanguageOptions,
+      errors: unconsumed,
+    },
+    {
+      name: "TS non-null assertion on awaited fetch, only status read",
+      code: `
+        const res = (await fetch(url))!;
+        console.log(res.status);
+      `,
+      languageOptions: tsLanguageOptions,
       errors: unconsumed,
     },
   ],
