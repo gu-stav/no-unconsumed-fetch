@@ -1,6 +1,8 @@
 import type { Rule, Scope } from "eslint";
 import type {
+  ArrowFunctionExpression,
   CallExpression,
+  FunctionExpression,
   Identifier,
   ObjectPattern,
   Property,
@@ -24,6 +26,8 @@ const BODY_READ_METHODS = new Set(["json", "text", "arrayBuffer", "blob", "formD
 const STREAM_CONSUME_METHODS = new Set(["cancel", "getReader", "pipeTo", "pipeThrough"]);
 
 const GLOBAL_OBJECTS = new Set(["globalThis", "window", "self"]);
+
+type FunctionLike = ArrowFunctionExpression | FunctionExpression;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -91,6 +95,22 @@ function resolveOuterExpression(node: Rule.Node): Rule.Node {
       current = parent;
       continue;
     }
+    // TypeScript-only wrappers that do not affect runtime value:
+    //   `fetch(url) as Response`    (TSAsExpression)
+    //   `fetch(url) satisfies ...`  (TSSatisfiesExpression)
+    //   `fetch(url)!`               (TSNonNullExpression)
+    //   `<Response>fetch(url)`      (TSTypeAssertion, legacy angle-bracket form)
+    const parentType = (parent as { type: string }).type;
+    if (
+      (parentType === "TSAsExpression" ||
+        parentType === "TSSatisfiesExpression" ||
+        parentType === "TSNonNullExpression" ||
+        parentType === "TSTypeAssertion") &&
+      (parent as { expression?: unknown }).expression === current
+    ) {
+      current = parent;
+      continue;
+    }
     break;
   }
   return current;
@@ -99,10 +119,12 @@ function resolveOuterExpression(node: Rule.Node): Rule.Node {
 /**
  * True when `node` sits in a position whose value is handed to someone else
  * (returned, thrown, yielded, passed as an argument, stored in an
- * array/object, used as an arrow body, etc.).
+ * array/object, etc.). Transparent wrappers like `await`, `?.`, and TS type
+ * expressions are walked through first.
  */
 function isValueHandedOff(node: Rule.Node): boolean {
-  const parent = node.parent;
+  const outer = resolveOuterExpression(node);
+  const parent = outer.parent;
   if (!parent) return false;
 
   switch (parent.type) {
@@ -120,13 +142,15 @@ function isValueHandedOff(node: Rule.Node): boolean {
 
     case "CallExpression":
     case "NewExpression":
-      return parent.arguments.includes(node as CallExpression);
+      return parent.arguments.includes(outer as CallExpression);
 
     case "ArrowFunctionExpression":
-      return parent.body === node;
+      return parent.body === outer;
 
     case "ConditionalExpression":
-      return (parent.consequent === node || parent.alternate === node) && isValueHandedOff(parent);
+      return (
+        (parent.consequent === outer || parent.alternate === outer) && isValueHandedOff(parent)
+      );
 
     case "LogicalExpression":
     case "SequenceExpression":
@@ -139,10 +163,12 @@ function isValueHandedOff(node: Rule.Node): boolean {
 
 /**
  * True when the identifier is used in a way that consumes the response body.
+ * Walks past transparent wrappers (`as`, `!`, `satisfies`) before inspecting.
  */
 function isConsumingUsage(identifier: Rule.Node): boolean {
-  const parent = identifier.parent;
-  if (!parent || parent.type !== "MemberExpression" || parent.object !== identifier) {
+  const outer = resolveOuterExpression(identifier);
+  const parent = outer.parent;
+  if (!parent || parent.type !== "MemberExpression" || parent.object !== outer) {
     return false;
   }
   if (parent.computed || parent.property.type !== "Identifier") return false;
@@ -235,6 +261,49 @@ function destructuresBody(pattern: ObjectPattern): boolean {
   return false;
 }
 
+/**
+ * True when the callback body consumes or hands off its first parameter
+ * (the response). Used to validate `.then(cb)` chains.
+ *
+ * If the callback has no first parameter, we cannot reason about consumption
+ * and conservatively treat it as not consuming. Chains like
+ * `fetch(url).then(() => {}).catch(...)` therefore leak.
+ */
+function isThenCallbackConsuming(scope: Scope.Scope, cb: FunctionLike): boolean {
+  const firstParam = cb.params[0];
+  if (!firstParam || firstParam.type !== "Identifier") {
+    // Destructuring parameter — if it picks up `body` or uses a rest element,
+    // consider it consumed. Otherwise the response body is unreachable.
+    if (firstParam && firstParam.type === "ObjectPattern") {
+      return destructuresBody(firstParam);
+    }
+    return false;
+  }
+  return isVariableConsumed(scope, firstParam.name);
+}
+
+/**
+ * For a `fetch(...).then(...)` (or chained) expression, find the `.then`
+ * CallExpression that immediately consumes the fetch. Returns the call node,
+ * or null if `fetch` is not followed by `.then(...)`.
+ */
+function findThenCall(memberExpressionChild: Rule.Node): CallExpression | null {
+  const parent = memberExpressionChild.parent;
+  if (
+    !parent ||
+    parent.type !== "MemberExpression" ||
+    parent.object !== memberExpressionChild ||
+    parent.computed ||
+    parent.property.type !== "Identifier" ||
+    parent.property.name !== "then"
+  ) {
+    return null;
+  }
+  const call = parent.parent;
+  if (!call || call.type !== "CallExpression" || call.callee !== parent) return null;
+  return call;
+}
+
 // ---------------------------------------------------------------------------
 // Rule definition
 // ---------------------------------------------------------------------------
@@ -274,16 +343,35 @@ const rule: Rule.RuleModule = {
           return;
         }
 
-        // 2) Handed off (returned, thrown, passed as arg, stored in collection).
+        // 2) Arrow-wrapped fetch passed as a callback to another function.
+        //    e.g. `defer(() => fetch(url))`. The external consumer usually
+        //    does not drain the body — this is a common leak pattern.
+        //    Exception: if the arrow body chains a consuming `.then`, fetch's
+        //    parent is a MemberExpression instead, so we never reach here.
+        if (parent.type === "ArrowFunctionExpression" && parent.body === resolved) {
+          const arrowParent = parent.parent;
+          if (
+            arrowParent &&
+            (arrowParent.type === "CallExpression" || arrowParent.type === "NewExpression") &&
+            arrowParent.arguments.includes(parent)
+          ) {
+            context.report({ node, messageId: "unconsumed" });
+            return;
+          }
+          // Otherwise: arrow is stored/returned as a factory. Trust the caller.
+          return;
+        }
+
+        // 3) Handed off (returned, thrown, passed as arg, stored in collection).
         if (isValueHandedOff(resolved)) return;
 
-        // 3) Assigned to a variable binding.
+        // 4) Assigned to a variable binding.
         if (parent.type === "VariableDeclarator" && parent.init === resolved) {
           handleBinding(parent, node);
           return;
         }
 
-        // 4) Assigned via assignment expression: `res = await fetch(url);`
+        // 5) Assigned via assignment expression: `res = await fetch(url);`
         if (
           parent.type === "AssignmentExpression" &&
           parent.operator === "=" &&
@@ -301,8 +389,34 @@ const rule: Rule.RuleModule = {
           return;
         }
 
-        // 5) Direct chaining: fetch(url).then(...), (await fetch(url)).json()
+        // 6) Direct chaining: fetch(url).then(...), (await fetch(url)).json()
         if (parent.type === "MemberExpression" && parent.object === resolved) {
+          const thenCall = findThenCall(resolved);
+          if (thenCall) {
+            const cb = thenCall.arguments[0];
+            if (cb && (cb.type === "ArrowFunctionExpression" || cb.type === "FunctionExpression")) {
+              const cbScope = sourceCode.getScope(cb as unknown as Rule.Node);
+              if (!isThenCallbackConsuming(cbScope, cb)) {
+                context.report({ node, messageId: "unconsumed" });
+              }
+              return;
+            }
+            // `.then(cb)` where cb is an identifier or other expression — we
+            // can't inspect the body. Fall through to the permissive default.
+            return;
+          }
+          // Chained with something other than `.then` (e.g. `.catch`, `.status`
+          // on an awaited fetch). Without a `.then` in the chain the body is
+          // never consumed. For awaited forms like `(await fetch(url)).json()`
+          // the member itself is the consumer — check it.
+          if (
+            !parent.computed &&
+            parent.property.type === "Identifier" &&
+            (BODY_READ_METHODS.has(parent.property.name) || parent.property.name === "body")
+          ) {
+            return;
+          }
+          context.report({ node, messageId: "unconsumed" });
           return;
         }
 

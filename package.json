@@ -43,6 +43,7 @@
     "@changesets/cli": "^2.31.0",
     "@types/eslint": "^9.6.1",
     "@types/estree": "^1.0.8",
+    "@typescript-eslint/parser": "^8.58.2",
     "eslint": "^10.2.0",
     "oxfmt": "^0.45.0",
     "oxlint": "^1.60.0",
