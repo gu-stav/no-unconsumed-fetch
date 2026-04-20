@@ -4,5 +4,7 @@
   "initialVersions": {
     "eslint-plugin-no-unconsumed-fetch": "1.0.0-alpha.0"
   },
-  "changesets": []
+  "changesets": [
+    "shaggy-pans-heal"
+  ]
 }
