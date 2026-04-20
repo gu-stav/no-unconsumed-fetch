@@ -19,20 +19,9 @@ import type {
  * yielded, passed as a callee argument, stored in an array/object).
  */
 
-const BODY_READ_METHODS = new Set([
-  "json",
-  "text",
-  "arrayBuffer",
-  "blob",
-  "formData",
-]);
+const BODY_READ_METHODS = new Set(["json", "text", "arrayBuffer", "blob", "formData"]);
 
-const STREAM_CONSUME_METHODS = new Set([
-  "cancel",
-  "getReader",
-  "pipeTo",
-  "pipeThrough",
-]);
+const STREAM_CONSUME_METHODS = new Set(["cancel", "getReader", "pipeTo", "pipeThrough"]);
 
 const GLOBAL_OBJECTS = new Set(["globalThis", "window", "self"]);
 
@@ -68,10 +57,7 @@ function isGlobalFetchCall(node: CallExpression, scope: Scope.Scope): boolean {
   return false;
 }
 
-function resolveToVariable(
-  scope: Scope.Scope,
-  identifier: Identifier,
-): Scope.Variable | null {
+function resolveToVariable(scope: Scope.Scope, identifier: Identifier): Scope.Variable | null {
   for (let current: Scope.Scope | null = scope; current; current = current.upper) {
     const ref = current.references.find((r) => r.identifier === identifier);
     if (ref) return ref.resolved;
@@ -79,10 +65,7 @@ function resolveToVariable(
   return null;
 }
 
-function findVariable(
-  scope: Scope.Scope,
-  name: string,
-): Scope.Variable | null {
+function findVariable(scope: Scope.Scope, name: string): Scope.Variable | null {
   for (let current: Scope.Scope | null = scope; current; current = current.upper) {
     const variable = current.set.get(name);
     if (variable) return variable;
@@ -143,10 +126,7 @@ function isValueHandedOff(node: Rule.Node): boolean {
       return parent.body === node;
 
     case "ConditionalExpression":
-      return (
-        (parent.consequent === node || parent.alternate === node) &&
-        isValueHandedOff(parent)
-      );
+      return (parent.consequent === node || parent.alternate === node) && isValueHandedOff(parent);
 
     case "LogicalExpression":
     case "SequenceExpression":
@@ -203,10 +183,7 @@ function isConsumingUsage(identifier: Rule.Node): boolean {
   return false;
 }
 
-function isCallee(
-  callee: Rule.Node,
-  maybeCall: Rule.Node | undefined,
-): boolean {
+function isCallee(callee: Rule.Node, maybeCall: Rule.Node | undefined): boolean {
   if (!maybeCall) return false;
   if (maybeCall.type === "CallExpression" && maybeCall.callee === callee) {
     return true;
@@ -223,10 +200,7 @@ function isCallee(
  * true if any reference indicates the body was consumed or the response was
  * handed off to someone else.
  */
-function isVariableConsumed(
-  scope: Scope.Scope,
-  name: string,
-): boolean {
+function isVariableConsumed(scope: Scope.Scope, name: string): boolean {
   const variable = findVariable(scope, name);
   if (!variable) return false;
 
@@ -269,8 +243,7 @@ const rule: Rule.RuleModule = {
   meta: {
     type: "problem",
     docs: {
-      description:
-        "Disallow fetch() calls whose response body is not consumed or cancelled",
+      description: "Disallow fetch() calls whose response body is not consumed or cancelled",
       recommended: true,
       url: "https://github.com/gu-stav/no-unconsumed-fetch#readme",
     },

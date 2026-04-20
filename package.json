@@ -2,11 +2,30 @@
   "name": "eslint-plugin-no-unconsumed-fetch",
   "version": "1.0.0",
   "description": "ESLint rule to flag fetch() calls whose response body is not consumed or cancelled",
-  "main": "dist/src/index.js",
-  "types": "dist/src/index.d.ts",
+  "keywords": [
+    "body",
+    "consume",
+    "eslint",
+    "eslintplugin",
+    "fetch",
+    "response"
+  ],
+  "homepage": "https://github.com/gu-stav/no-unconsumed-fetch#readme",
+  "bugs": {
+    "url": "https://github.com/gu-stav/no-unconsumed-fetch/issues"
+  },
+  "license": "ISC",
+  "author": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gu-stav/no-unconsumed-fetch.git"
+  },
   "files": [
     "dist/src"
   ],
+  "type": "commonjs",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "tsx tests/rules/no-unconsumed-fetch.test.ts",
@@ -16,37 +35,6 @@
     "format:check": "oxfmt --check",
     "prepublishOnly": "npm run build"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/gu-stav/no-unconsumed-fetch.git"
-  },
-  "keywords": [
-    "eslint",
-    "eslintplugin",
-    "fetch",
-    "response",
-    "body",
-    "consume"
-  ],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "peerDependencies": {
-    "eslint": ">=8.40.0"
-  },
-  "bugs": {
-    "url": "https://github.com/gu-stav/no-unconsumed-fetch/issues"
-  },
-  "homepage": "https://github.com/gu-stav/no-unconsumed-fetch#readme",
-  "packageManager": "pnpm@10.33.0",
-  "engines": {
-    "node": ">=20"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
-  },
   "devDependencies": {
     "@types/eslint": "^9.6.1",
     "@types/estree": "^1.0.8",
@@ -55,5 +43,17 @@
     "oxlint": "^1.60.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
+  },
+  "peerDependencies": {
+    "eslint": ">=8.40.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

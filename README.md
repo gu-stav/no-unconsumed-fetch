@@ -92,17 +92,17 @@ fetch(url).then((r) => r.json());
 
 ### Recognized consumption methods
 
-| Method              | Description              |
-| ------------------- | ------------------------ |
-| `res.json()`        | Parse body as JSON       |
-| `res.text()`        | Read body as text        |
-| `res.arrayBuffer()` | Read body as ArrayBuffer |
-| `res.blob()`        | Read body as Blob        |
-| `res.formData()`    | Read body as FormData    |
-| `res.body.cancel()` | Cancel the body stream   |
-| `res.body.getReader()` | Get a ReadableStream reader |
-| `res.body.pipeTo()` | Pipe the stream          |
-| `res.body.pipeThrough()` | Pipe through a transform |
+| Method                   | Description                 |
+| ------------------------ | --------------------------- |
+| `res.json()`             | Parse body as JSON          |
+| `res.text()`             | Read body as text           |
+| `res.arrayBuffer()`      | Read body as ArrayBuffer    |
+| `res.blob()`             | Read body as Blob           |
+| `res.formData()`         | Read body as FormData       |
+| `res.body.cancel()`      | Cancel the body stream      |
+| `res.body.getReader()`   | Get a ReadableStream reader |
+| `res.body.pipeTo()`      | Pipe the stream             |
+| `res.body.pipeThrough()` | Pipe through a transform    |
 
 ## Development
 
