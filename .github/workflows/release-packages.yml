@@ -11,7 +11,7 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 permissions:
   contents: write
   pull-requests: write
-  # id-token: write # Enable once repo is public (needed for npm provenance)
+  id-token: write
 
 jobs:
   release:
