@@ -1,6 +1,6 @@
 {
   "name": "@sanity/no-unconsumed-fetch",
-  "version": "1.0.0-alpha.0",
+  "version": "1.0.0-alpha.1",
   "description": "ESLint rule to flag fetch() calls whose response body is not consumed or cancelled",
   "keywords": [
     "body",
