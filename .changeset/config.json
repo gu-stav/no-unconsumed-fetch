@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/@changesets/config@3.1.4/schema.json",
-  "changelog": ["@changesets/changelog-github", { "repo": "gu-stav/no-unconsumed-fetch" }],
+  "changelog": ["@changesets/changelog-github", { "repo": "sanity-io/no-unconsumed-fetch" }],
   "commit": false,
   "fixed": [],
   "linked": [],
