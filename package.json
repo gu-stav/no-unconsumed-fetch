@@ -1,5 +1,5 @@
 {
-  "name": "eslint-plugin-no-unconsumed-fetch",
+  "name": "no-unconsumed-fetch",
   "version": "1.0.0-alpha.2",
   "description": "ESLint rule to flag fetch() calls whose response body is not consumed or cancelled",
   "keywords": [

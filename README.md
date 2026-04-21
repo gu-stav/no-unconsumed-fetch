@@ -1,4 +1,4 @@
-# eslint-plugin-no-unconsumed-fetch
+# no-unconsumed-fetch
 
 An ESLint rule that flags `fetch()` calls whose response body is never consumed or cancelled.
 
@@ -15,13 +15,13 @@ See [sanity-io/sanity#12681](https://github.com/sanity-io/sanity/pull/12681) for
 ## Installation
 
 ```bash
-npm install --save-dev eslint-plugin-no-unconsumed-fetch
+npm install --save-dev no-unconsumed-fetch
 ```
 
 ## Usage (flat config — `eslint.config.js`)
 
 ```js
-import noUnconsumedFetch from "eslint-plugin-no-unconsumed-fetch";
+import noUnconsumedFetch from "no-unconsumed-fetch";
 
 export default [
   noUnconsumedFetch.configs.recommended,
@@ -32,7 +32,7 @@ export default [
 Or manually:
 
 ```js
-import noUnconsumedFetch from "eslint-plugin-no-unconsumed-fetch";
+import noUnconsumedFetch from "no-unconsumed-fetch";
 
 export default [
   {

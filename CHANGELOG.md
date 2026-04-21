@@ -1,4 +1,4 @@
-# eslint-plugin-no-unconsumed-fetch
+# no-unconsumed-fetch
 
 ## 1.0.0-alpha.2
 

@@ -2,7 +2,7 @@ import type { ESLint, Linter } from "eslint";
 import noUnconsumedFetch = require("./rules/no-unconsumed-fetch");
 
 const meta = {
-  name: "eslint-plugin-no-unconsumed-fetch",
+  name: "no-unconsumed-fetch",
   version: "1.0.0-alpha.0",
 } as const;
 

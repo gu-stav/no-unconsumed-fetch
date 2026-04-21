@@ -2,7 +2,7 @@
   "mode": "pre",
   "tag": "alpha",
   "initialVersions": {
-    "eslint-plugin-no-unconsumed-fetch": "1.0.0-alpha.0"
+    "no-unconsumed-fetch": "1.0.0-alpha.0"
   },
   "changesets": [
     "purple-dragons-fry",
