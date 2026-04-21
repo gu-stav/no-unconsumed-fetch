@@ -1,5 +1,11 @@
 # @sanity/no-unconsumed-fetch
 
+## 1.0.0-alpha.2
+
+### Patch Changes
+
+- [#25](https://github.com/sanity-io/eslint-no-unconsumed-fetch/pull/25) [`3071265`](https://github.com/sanity-io/eslint-no-unconsumed-fetch/commit/30712653685ffa2e69d5be86e57c7ad81464380b) Thanks [@joshuaellis](https://github.com/joshuaellis)! - fix: flatten build output paths from `dist/src/*` to `dist/*`
+
 ## 1.0.0-alpha.1
 
 ### Patch Changes

@@ -5,6 +5,7 @@
     "@sanity/no-unconsumed-fetch": "1.0.0-alpha.0"
   },
   "changesets": [
+    "flatten-dist-paths",
     "purple-dragons-fry",
     "shaggy-pans-heal",
     "strong-lights-worry"
