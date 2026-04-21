@@ -1,5 +1,5 @@
 ---
-"no-unconsumed-fetch": minor
+"@sanity/no-unconsumed-fetch": minor
 ---
 
 feat: handle more cases
