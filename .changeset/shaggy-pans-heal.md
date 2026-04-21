@@ -1,5 +1,5 @@
 ---
-"no-unconsumed-fetch": major
+"@sanity/no-unconsumed-fetch": major
 ---
 
 feat: no-unconsumed-fetch eslint rule
