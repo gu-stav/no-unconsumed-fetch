@@ -15,7 +15,7 @@ runs:
         node-version-file: .nvmrc
 
     - name: Install pnpm
-      uses: pnpm/action-setup@v4
+      uses: pnpm/action-setup@v5
       with:
         cache: true
 
